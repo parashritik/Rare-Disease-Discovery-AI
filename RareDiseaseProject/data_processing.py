@@ -1,253 +1,61 @@
-"""
-Data processing utilities for Rare Disease Drug Repurposing project
-"""
-
-from pathlib import Path
 import pandas as pd
 import xml.etree.ElementTree as ET
-
-
-# --------------------------------------------------
-# Base paths
-# --------------------------------------------------
-BASE_DIR = Path(__file__).resolve().parent
-DATASET_DIR = BASE_DIR / "datasets"
-
-print("data_processing loaded successfully")
-
-
-# --------------------------------------------------
-# Orphanet Product 1 (Diseases)
-# --------------------------------------------------
-def load_orphanet_xml(path=None):
-
-    if path is None:
-        path = DATASET_DIR / "en_product1.xml"
-
-    tree = ET.parse(path)
-    root = tree.getroot()
-
-    records = []
-
-    for disorder in root.findall(".//Disorder"):
-        records.append(
-            {
-                "orpha_code": disorder.findtext("OrphaCode"),
-                "disease_name": disorder.findtext("Name"),
-            }
-        )
-
-    return pd.DataFrame(records)
-
-
-# --------------------------------------------------
-# Orphanet Product 6 (Disease–Gene associations)
-# --------------------------------------------------
-def load_orphanet_genes_xml(path=None):
-
-    if path is None:
-        path = DATASET_DIR / "en_product6.xml"
-
-    tree = ET.parse(path)
-    root = tree.getroot()
-
-    records = []
-
-    for disorder in root.findall(".//Disorder"):
-        orpha_code = disorder.findtext("OrphaCode")
-
-        for gene in disorder.findall(".//Gene"):
-            symbol = gene.findtext("Symbol")
-
-            if symbol:
-                records.append(
-                    {
-                        "orpha_code": orpha_code,
-                        "gene_symbol": symbol.upper(),
-                    }
-                )
-
-    return pd.DataFrame(records).drop_duplicates()
-
-
-# --------------------------------------------------
-# DrugBank
-# --------------------------------------------------
-def load_drugbank_xml(path=None):
-
-    if path is None:
-        path = DATASET_DIR / "drugbank.xml"
-
-    tree = ET.parse(path)
-    root = tree.getroot()
-
-    ns = {"db": "http://www.drugbank.ca"}
-
-    records = []
-
-    for drug in root.findall("db:drug", ns):
-        drug_name = drug.findtext("db:name", namespaces=ns)
-
-        for target in drug.findall(".//db:target", ns):
-            gene = target.findtext(".//db:gene-name", namespaces=ns)
-
-            if gene:
-                records.append(
-                    {
-                        "drug_name": drug_name,
-                        "gene_symbol": gene.upper(),
-                    }
-                )
-
-    return pd.DataFrame(records).drop_duplicates()
-
-
-# --------------------------------------------------
-# STRING protein info
-# --------------------------------------------------
-def load_string_protein_info(path):
-
-    df = pd.read_csv(
-        path,
-        sep="\t",
-        comment="#",
-        header=None,
-        usecols=[0, 1],
-    )
-
-    df.columns = ["protein_id", "gene_symbol"]
-
-    df["gene_symbol"] = df["gene_symbol"].str.upper()
-
-    return df.dropna().drop_duplicates()
-
-
-# --------------------------------------------------
-# STRING PPI network
-# --------------------------------------------------
-def load_string_ppi(path, score_threshold=700):
-
-    df = pd.read_csv(
-        path,
-        sep=r"\s+",
-        engine="python"
-    )
-
-    # Rename to consistent internal format
-    df.columns = ["protein_id_1", "protein_id_2", "score"]
-
-    df = df[df["score"] >= score_threshold]
-
-    return df
-
-
-# --------------------------------------------------
-# PPI-based gene expansion
-# --------------------------------------------------
-def expand_genes_via_ppi(
-    orphanet_genes_df,
-    protein_info_df,
-    ppi_df,
-    score_threshold=700,
-):
-
-    # Merge gene → protein
-    genes_with_protein = orphanet_genes_df.merge(
-        protein_info_df,
-        on="gene_symbol",
-        how="left"
-    )
-
-    genes_with_protein = genes_with_protein.dropna(subset=["protein_id"])
-
-    expanded_records = []
-
-    for _, row in genes_with_protein.iterrows():
-        orpha_code = row["orpha_code"]
-        protein_id = row["protein_id"]
-
-        neighbors = ppi_df[
-            (ppi_df["protein_id_1"] == protein_id)
-            | (ppi_df["protein_id_2"] == protein_id)
-        ]
-
-        for _, n in neighbors.iterrows():
-
-            if n["protein_id_1"] == protein_id:
-                neighbor_protein = n["protein_id_2"]
-            else:
-                neighbor_protein = n["protein_id_1"]
-
-            expanded_records.append(
-                {
-                    "orpha_code": orpha_code,
-                    "protein_id": neighbor_protein,
-                    "ppi_score": n["score"],
-                }
-            )
-
-    expanded_df = pd.DataFrame(expanded_records)
-
-    if expanded_df.empty:
-        return expanded_df
-
-    # Map back to gene symbols
-    expanded_df = expanded_df.merge(
-        protein_info_df,
-        on="protein_id",
-        how="left"
-    )
-
-    expanded_df = expanded_df.dropna(subset=["gene_symbol"]).drop_duplicates()
-
-    return expanded_df
-
-
-# --------------------------------------------------
-# Master tables
-# --------------------------------------------------
-def create_master_table(orphanet_genes_df, drugbank_df, orphanet_df):
-
-    df = orphanet_genes_df.merge(
-        drugbank_df,
-        on="gene_symbol",
-        how="left",
-    )
-
-    df = df.merge(
-        orphanet_df,
-        on="orpha_code",
-        how="left",
-    )
-
-    return df
-
-
-def create_master_table_with_ppi(
-    orphanet_genes_df,
-    drugbank_df,
-    orphanet_df,
-    expanded_genes_df,
-):
-
-    combined_genes = pd.concat(
-        [
-            orphanet_genes_df[["orpha_code", "gene_symbol"]],
-            expanded_genes_df[["orpha_code", "gene_symbol"]],
-        ],
-        ignore_index=True,
-    ).drop_duplicates()
-
-    df = combined_genes.merge(
-        drugbank_df,
-        on="gene_symbol",
-        how="left",
-    )
-
-    df = df.merge(
-        orphanet_df,
-        on="orpha_code",
-        how="left",
-    )
-
-    return df
+import gc
+import os
+
+def parse_xml_to_df(path, file_type="orphanet"):
+    if path is None or not os.path.exists(path):
+        return pd.DataFrame(columns=['gene_symbol', 'is_target'])
+    data = []
+    try:
+        tree = ET.parse(path)
+        root = tree.getroot()
+        if file_type == "orphanet":
+            for gene in root.iter('Gene'):
+                symbol = gene.find('Symbol')
+                if symbol is not None: data.append({'gene_symbol': symbol.text, 'is_target': 1})
+        elif file_type == "drugbank":
+            for target in root.findall('.//{*}target'):
+                for poly in target.findall('.//{*}polypeptide'):
+                    sym = poly.find('.//{*}gene-name')
+                    if sym is not None: data.append({'gene_symbol': sym.text.upper() if sym.text else None, 'is_target': 1})
+        return pd.DataFrame(data).dropna()
+    except Exception as e:
+        print(f"❌ XML Error: {e}")
+        return pd.DataFrame(columns=['gene_symbol', 'is_target'])
+
+def get_optimized_aggregated_data(ppi_path, info_path, p1_path, p6_path, db_path):
+    print("🧬 Step 2: Advanced Feature Engineering (Skew & Degree Mean)...")
+    
+    # Load and Map PPI
+    ppi = pd.read_csv(ppi_path, sep=' ')
+    info = pd.read_csv(info_path, sep='\t')
+    mapping = dict(zip(info['#string_protein_id'], info['preferred_name']))
+    ppi['gene_symbol'] = ppi['protein1'].map(mapping)
+    
+    # Network Degree calculation
+    ppi['network_degree'] = ppi.groupby('gene_symbol')['gene_symbol'].transform('count')
+    
+    # Load Targets
+    p1 = parse_xml_to_df(p1_path, "orphanet")
+    p6 = parse_xml_to_df(p6_path, "orphanet")
+    db = parse_xml_to_df(db_path, "drugbank")
+    targets = pd.concat([p1, p6, db]).drop_duplicates(subset=['gene_symbol'])
+    
+    # Merge
+    df = pd.merge(ppi, targets, on='gene_symbol', how='left')
+    df['is_target'] = df['is_target'].fillna(0).astype(int)
+    
+    # ADVANCED AGGREGATION (Matching your Colab logic)
+    df_agg = df.groupby('gene_symbol').agg({
+        'combined_score': ['mean', 'max', 'std', 'skew', 'count'],
+        'network_degree': ['max', 'mean'],
+        'is_target': 'max'
+    }).reset_index()
+    
+    df_agg.columns = ['gene_symbol', 'ppi_mean', 'ppi_max', 'ppi_std', 'ppi_skew', 
+                      'interaction_count', 'degree_max', 'degree_mean', 'is_target']
+    
+    del ppi, info, p1, p6, db, targets, df
+    gc.collect()
+    return df_agg.fillna(0)
