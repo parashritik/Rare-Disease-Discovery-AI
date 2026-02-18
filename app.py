@@ -6,9 +6,9 @@ app = Flask(__name__)
 CORS(app) 
 engine = DiscoveryEngine()
 
-@app.route('/api/dashboard', methods=['GET'])
-def dashboard():
-    return jsonify(engine.get_top_10())
+@app.route('/api/dashboard/genes', methods=['GET'])
+def top_genes():
+    return jsonify(engine.get_top_10_genes())
 
 @app.route('/api/search', methods=['GET'])
 def search():

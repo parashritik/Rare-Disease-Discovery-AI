@@ -1,10 +1,8 @@
-import data_processing, classifiers, analysis, utils
-import gc
+import utils, data_processing, classifiers, analysis
 
 def main():
     utils.ensure_directories()
     
-    # Set your paths here (assuming local datasets folder)
     PATHS = {
         "links": utils.DATA_DIR / '9606.protein.links.v11.5.txt',
         "info":  utils.DATA_DIR / '9606.protein.info.v11.5.txt',
@@ -18,15 +16,14 @@ def main():
         PATHS['links'], PATHS['info'], PATHS['p1'], PATHS['p6'], PATHS['db']
     )
 
-    # Training
     opt_threshold, final_probs = classifiers.train_hyper_optimized_model(df_agg, utils.MOD_DIR)
 
-    # Analysis
+    # We save to the ROOT 'top_biological_targets.csv' for the API to find easily
     analysis.generate_discovery_report(
         df_agg, 
         final_probs, 
         opt_threshold, 
-        utils.OUT_DIR / "optimized_capstone_results.csv"
+        utils.BASE_DIR / "top_biological_targets.csv"
     )
 
 if __name__ == "__main__":
