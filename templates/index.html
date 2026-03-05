@@ -4,54 +4,45 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Rare Disease Drug Suggestions</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 40px;
-      line-height: 1.5;
-    }
-    .container {
-      max-width: 600px;
-    }
-    label {
-      display: block;
-      margin-top: 12px;
-      font-weight: 600;
-    }
-    input {
-      width: 100%;
-      padding: 8px;
-      margin-top: 6px;
-      box-sizing: border-box;
-    }
-    button {
-      margin-top: 16px;
-      padding: 10px 14px;
-      cursor: pointer;
-    }
-    pre {
-      margin-top: 16px;
-      background: #f5f5f5;
-      padding: 12px;
-      overflow-x: auto;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-  </style>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-  <div class="container">
-    <h1>Rare Disease Drug Suggestion</h1>
-    <label for="gene">Enter gene</label>
-    <input id="gene" type="text" placeholder="e.g. A2M" />
+<body class="min-h-screen bg-slate-100 text-slate-900">
+  <main class="min-h-screen w-full">
+    <section class="min-h-screen w-full bg-white">
+      <div class="border-b border-slate-200 bg-slate-50 px-6 py-6 sm:px-10 lg:px-14">
+        <p class="text-sm font-medium tracking-wide text-cyan-700">Clinical Decision Support</p>
+        <h1 class="mt-1 text-3xl font-bold text-slate-900">Rare Disease Drug Suggestion</h1>
+        <p class="mt-2 text-sm text-slate-600">Enter either a gene symbol or a disease name to retrieve model-backed candidate output.</p>
+      </div>
 
-    <label for="disease">Enter disease</label>
-    <input id="disease" type="text" placeholder="e.g. Pompe" />
+      <div class="grid gap-8 px-6 py-8 sm:px-10 lg:grid-cols-2 lg:px-14">
+        <div class="space-y-5">
+          <div>
+            <label for="gene" class="block text-sm font-semibold text-slate-800">Enter gene</label>
+            <input id="gene" type="text" placeholder="e.g. A2M" class="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm outline-none transition focus:border-cyan-600 focus:ring-2 focus:ring-cyan-100" />
+          </div>
 
-    <button id="searchBtn" type="button">Get Drug Suggestion</button>
+          <div>
+            <label for="disease" class="block text-sm font-semibold text-slate-800">Enter disease</label>
+            <input id="disease" type="text" placeholder="e.g. Farber disease" class="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm outline-none transition focus:border-cyan-600 focus:ring-2 focus:ring-cyan-100" />
+          </div>
 
-    <pre id="result">Enter a gene or a disease and click the button.</pre>
-  </div>
+          <button id="searchBtn" type="button" class="inline-flex items-center rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-cyan-800 focus:outline-none focus:ring-2 focus:ring-cyan-200">
+            Get Drug Suggestion
+          </button>
+
+          <p class="text-xs text-slate-500">Tip: Fill one field at a time for a cleaner lookup.</p>
+        </div>
+
+        <div>
+          <h2 class="text-sm font-semibold text-slate-800">Model Response</h2>
+          <div id="result" class="mt-2 min-h-64 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800">
+            <p class="text-slate-500">Enter a gene or a disease and click the button.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
 
   <script>
     const geneInput = document.getElementById('gene');
@@ -59,12 +50,94 @@
     const searchBtn = document.getElementById('searchBtn');
     const result = document.getElementById('result');
 
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    function metricRow(label, value) {
+      return `
+        <div class="rounded-md border border-slate-200 bg-white px-3 py-2">
+          <p class="text-xs text-slate-500">${escapeHtml(label)}</p>
+          <p class="mt-1 font-medium text-slate-900">${escapeHtml(value)}</p>
+        </div>
+      `;
+    }
+
+    function renderGeneResult(data) {
+      const xai = data.xai_weights || {};
+      result.innerHTML = `
+        <div class="space-y-4">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <p class="text-xs uppercase tracking-wide text-cyan-700">Gene Match</p>
+              <h3 class="text-lg font-semibold text-slate-900">${escapeHtml(data.gene_symbol || 'N/A')}</h3>
+            </div>
+            <span class="rounded-full bg-cyan-100 px-3 py-1 text-xs font-semibold text-cyan-800">${escapeHtml(data.status || 'Unknown')}</span>
+          </div>
+
+          <div class="grid gap-2 sm:grid-cols-2">
+            ${metricRow('Discovery Score', data.discovery_score ?? 'N/A')}
+            ${metricRow('Existing Drugs', data.existing_drugs || 'Not available')}
+          </div>
+
+          <div class="rounded-md border border-slate-200 bg-white p-3">
+            <p class="text-xs text-slate-500">Assistant Advice</p>
+            <p class="mt-1 text-slate-900">${escapeHtml(data.assistant_advice || 'No advice available')}</p>
+          </div>
+
+          <div>
+            <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">XAI Weights</p>
+            <div class="grid gap-2 sm:grid-cols-2">
+              ${Object.keys(xai).length
+                ? Object.entries(xai).map(([key, value]) => metricRow(key, value)).join('')
+                : '<p class="text-slate-500">No XAI values available.</p>'}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderDiseaseResult(data) {
+      const rows = Array.isArray(data.results) ? data.results : [];
+      result.innerHTML = `
+        <div class="space-y-4">
+          <div>
+            <p class="text-xs uppercase tracking-wide text-cyan-700">Disease Match</p>
+            <h3 class="text-lg font-semibold text-slate-900">${escapeHtml(data.disease || 'N/A')}</h3>
+            <p class="mt-1 text-xs text-slate-500">${rows.length} gene result(s) found</p>
+          </div>
+
+          <div class="space-y-2">
+            ${rows.length ? rows.map((item) => `
+              <div class="rounded-md border border-slate-200 bg-white p-3">
+                <div class="flex items-center justify-between gap-3">
+                  <p class="font-semibold text-slate-900">${escapeHtml(item.gene_symbol || 'N/A')}</p>
+                  <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">${escapeHtml(item.status || 'Unknown')}</span>
+                </div>
+                <p class="mt-2 text-sm text-slate-700"><span class="font-medium">Score:</span> ${escapeHtml(item.discovery_score ?? 'N/A')}</p>
+                <p class="text-sm text-slate-700"><span class="font-medium">Drugs:</span> ${escapeHtml(item.existing_drugs || 'Not available')}</p>
+              </div>
+            `).join('') : '<p class="text-slate-500">No gene-level results found for this disease.</p>'}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderError(message) {
+      result.innerHTML = `<div class="rounded-md border border-rose-200 bg-rose-50 p-3 text-rose-800">${escapeHtml(message)}</div>`;
+    }
+
     searchBtn.addEventListener('click', async () => {
       const gene = geneInput.value.trim();
       const disease = diseaseInput.value.trim();
 
       if (!gene && !disease) {
-        result.textContent = 'Please enter either a gene or a disease.';
+        renderError('Please enter either a gene or a disease.');
         return;
       }
 
@@ -76,13 +149,23 @@
         const response = await fetch(`${apiBase}/api/search?${param}`);
         if (!response.ok) {
           const errorText = await response.text();
-          result.textContent = `Request failed (${response.status}): ${errorText || response.statusText}`;
+          renderError(`Request failed (${response.status}): ${errorText || response.statusText}`);
           return;
         }
         const data = await response.json();
-        result.textContent = JSON.stringify(data, null, 2);
+        if (data.error) {
+          renderError(data.error);
+          return;
+        }
+
+        if (Array.isArray(data.results)) {
+          renderDiseaseResult(data);
+          return;
+        }
+
+        renderGeneResult(data);
       } catch (error) {
-        result.textContent = `Failed to fetch suggestion. Ensure the Flask server is running, then open this page from http://127.0.0.1:5001 or http://127.0.0.1:5002.\n\nError: ${error.message}`;
+        renderError(`Failed to fetch suggestion. Ensure the Flask server is running, then open this page from http://127.0.0.1:5001 or http://127.0.0.1:5002. Error: ${error.message}`);
       }
     });
   </script>
