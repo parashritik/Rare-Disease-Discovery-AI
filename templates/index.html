@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rare Disease Drug Suggestions</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 40px;
+      line-height: 1.5;
+    }
+    .container {
+      max-width: 600px;
+    }
+    label {
+      display: block;
+      margin-top: 12px;
+      font-weight: 600;
+    }
+    input {
+      width: 100%;
+      padding: 8px;
+      margin-top: 6px;
+      box-sizing: border-box;
+    }
+    button {
+      margin-top: 16px;
+      padding: 10px 14px;
+      cursor: pointer;
+    }
+    pre {
+      margin-top: 16px;
+      background: #f5f5f5;
+      padding: 12px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Rare Disease Drug Suggestion</h1>
+    <label for="gene">Enter gene</label>
+    <input id="gene" type="text" placeholder="e.g. A2M" />
+
+    <label for="disease">Enter disease</label>
+    <input id="disease" type="text" placeholder="e.g. Pompe" />
+
+    <button id="searchBtn" type="button">Get Drug Suggestion</button>
+
+    <pre id="result">Enter a gene or a disease and click the button.</pre>
+  </div>
+
+  <script>
+    const geneInput = document.getElementById('gene');
+    const diseaseInput = document.getElementById('disease');
+    const searchBtn = document.getElementById('searchBtn');
+    const result = document.getElementById('result');
+
+    searchBtn.addEventListener('click', async () => {
+      const gene = geneInput.value.trim();
+      const disease = diseaseInput.value.trim();
+
+      if (!gene && !disease) {
+        result.textContent = 'Please enter either a gene or a disease.';
+        return;
+      }
+
+      const param = gene ? `gene=${encodeURIComponent(gene)}` : `disease=${encodeURIComponent(disease)}`;
+      const isHttpPage = window.location.protocol === 'http:' || window.location.protocol === 'https:';
+      const apiBase = isHttpPage ? window.location.origin : 'http://127.0.0.1:5001';
+
+      try {
+        const response = await fetch(`${apiBase}/api/search?${param}`);
+        if (!response.ok) {
+          const errorText = await response.text();
+          result.textContent = `Request failed (${response.status}): ${errorText || response.statusText}`;
+          return;
+        }
+        const data = await response.json();
+        result.textContent = JSON.stringify(data, null, 2);
+      } catch (error) {
+        result.textContent = `Failed to fetch suggestion. Ensure the Flask server is running, then open this page from http://127.0.0.1:5001 or http://127.0.0.1:5002.\n\nError: ${error.message}`;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from inference_engine import DiscoveryEngine
 
@@ -8,6 +8,11 @@ CORS(app)
 
 # Initialize Discovery Engine
 engine = DiscoveryEngine()
+
+
+@app.route('/', methods=['GET'])
+def home():
+    return render_template('index.html')
 
 @app.route('/api/dashboard/genes', methods=['GET'])
 def top_genes():

@@ -37,7 +37,7 @@ def get_optimized_aggregated_data(ppi_path, info_path, p1_path, p6_path, db_path
     print("🧬 Step 2: Advanced Feature Engineering with Drug Mapping...")
     ppi = pd.read_csv(ppi_path, sep=' ')
     info = pd.read_csv(info_path, sep='\t')
-    mapping = dict(zip(info['#string_protein_id'], info['preferred_name']))
+    mapping = dict(zip(info['string_protein_id'], info['preferred_name']))
     ppi['gene_symbol'] = ppi['protein1'].map(mapping)
     ppi['network_degree'] = ppi.groupby('gene_symbol')['gene_symbol'].transform('count')
     
