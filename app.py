@@ -3,6 +3,7 @@ from flask_cors import CORS
 from inference_engine import DiscoveryEngine
 import logging
 import platform
+import os
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -96,5 +97,40 @@ def diseases():
     })
 
 
+@app.route('/api/gallery', methods=['GET'])
+def gallery():
+    if not engine:
+        return jsonify({"error": "Engine Offline"}), 500
+
+    try:
+        top_genes = engine.get_top_10_genes()
+        disease_cards = []
+
+        for disease_name, genes in engine.disease_map.items():
+            safe_genes = genes or []
+            disease_cards.append({
+                "disease": disease_name,
+                "gene_count": len(safe_genes),
+                "sample_genes": safe_genes[:5],
+            })
+
+        disease_cards = sorted(
+            disease_cards,
+            key=lambda item: item["gene_count"],
+            reverse=True,
+        )[:20]
+
+        return jsonify({
+            "genes": top_genes,
+            "diseases": disease_cards,
+            "gene_count": len(top_genes),
+            "disease_count": len(disease_cards),
+        })
+    except Exception as e:
+        return jsonify({"error": "Failed to load gallery", "details": str(e)}), 500
+
+
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    host = os.getenv('FLASK_HOST', '127.0.0.1')
+    port = int(os.getenv('FLASK_PORT', '8000'))
+    app.run(debug=True, host=host, port=port)
