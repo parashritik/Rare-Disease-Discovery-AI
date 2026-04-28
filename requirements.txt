@@ -3,3 +3,6 @@ flask-cors
 pandas
 joblib
 groq
+python-dotenv
+scikit-learn
+numpy
