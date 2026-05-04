@@ -138,7 +138,7 @@ class DiscoveryEngine:
         return {
             "gene_symbol": symbol,
             "discovery_score": score,
-            "status": "Novel Discovery" if row['is_target'] == 0 else "Known Target",
+            "status": "Novel Discovery" if row['is_target'] == 0 else ("Drug Target" if mapped_drugs else "Disease Gene"),
             "existing_drugs": existing_drugs,
             "assistant_advice": advice,
             "xai_weights": xai,
